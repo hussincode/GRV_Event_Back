@@ -4,6 +4,7 @@ const {
   getRegistration,
   listRegistrations,
   updateRegistrationStatusColumns,
+  updateRegistrationData,
   withRowLock,
 } = require("../lib/sheets");
 const { generateTicketId, generateTicketQrCodeDataUrl } = require("../lib/qrcode");
@@ -136,6 +137,68 @@ router.post("/admin/registrations/:rowId/reject", requireAdmin, async (req, res)
   } catch (err) {
     console.error("Failed to reject registration:", err);
     res.status(500).json({ error: "Could not reject this registration right now. Please try again." });
+  }
+});
+
+router.put("/admin/registrations/:rowId", requireAdmin, async (req, res) => {
+  const rowId = Number(req.params.rowId);
+  if (!rowId || Number.isNaN(rowId)) {
+    res.status(404).json({ error: "Registration not found" });
+    return;
+  }
+
+  const GOVERNORATES = [
+    "Cairo", "Alexandria", "Giza", "Qalyubia", "Port Said", "Suez", "Dakahlia", "Sharqia",
+    "Gharbia", "Monufia", "Beheira", "Ismailia", "Faiyum", "Beni Suef", "Minya", "Asyut",
+    "Sohag", "Qena", "Aswan", "Luxor", "Red Sea", "New Valley", "Matrouh", "North Sinai",
+    "South Sinai", "Kafr El Sheikh", "Damietta",
+  ];
+
+  const body = req.body || {};
+  const errors = [];
+
+  if (!body.fullName || String(body.fullName).trim().length < 2) errors.push("Full name is required");
+  if (!body.email || !/^\S+@\S+\.\S+$/.test(body.email)) errors.push("A valid email is required");
+  if (!body.mobileNumber || String(body.mobileNumber).trim().length < 8) errors.push("A valid mobile number is required");
+  if (!body.whatsappNumber || String(body.whatsappNumber).trim().length < 8) errors.push("A valid WhatsApp number is required");
+  if (!["Male", "Female"].includes(body.gender)) errors.push("Please select a gender");
+  const age = Number(body.age);
+  if (!age || age < 5 || age > 120) errors.push("Please enter a valid age");
+  if (!body.governorate || !GOVERNORATES.includes(body.governorate)) errors.push("Please select a governorate");
+  if (!body.educationalStage || String(body.educationalStage).trim().length === 0) errors.push("Please select an educational stage");
+  if (!["Pending", "Approved", "Rejected"].includes(body.status)) errors.push("Invalid status");
+
+  if (errors.length > 0) {
+    res.status(400).json({ error: errors[0] });
+    return;
+  }
+
+  try {
+    const existing = await getRegistration(rowId);
+    if (!existing || !existing.fullName) {
+      res.status(404).json({ error: "Registration not found" });
+      return;
+    }
+
+    const updated = await updateRegistrationData(rowId, {
+      fullName: String(body.fullName).trim(),
+      email: String(body.email).trim(),
+      mobileNumber: String(body.mobileNumber).trim(),
+      whatsappNumber: String(body.whatsappNumber).trim(),
+      gender: body.gender,
+      age: Number(body.age),
+      governorate: body.governorate,
+      educationalStage: String(body.educationalStage).trim(),
+      consentMediaUsage: existing.consentMediaUsage,
+      nationalIdFileUrl: existing.nationalIdFileUrl || "",
+      birthPaperFileUrl: existing.birthPaperFileUrl || "",
+      status: body.status,
+    });
+
+    res.json(updated);
+  } catch (err) {
+    console.error("Failed to update registration:", err);
+    res.status(500).json({ error: "Could not update this registration right now. Please try again." });
   }
 });
 

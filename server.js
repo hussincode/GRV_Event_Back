@@ -4,10 +4,12 @@ const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 
+
 const registerRouter = require("./routes/register");
 const adminRouter = require("./routes/admin");
 const registrationsRouter = require("./routes/registrations");
 const checkinRouter = require("./routes/checkin");
+
 
 const app = express();
 
@@ -20,6 +22,10 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Expose uploaded files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
