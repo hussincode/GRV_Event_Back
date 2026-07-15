@@ -52,6 +52,8 @@ router.post("/admin/registrations/:rowId/approve", requireAdmin, async (req, res
       // Idempotent: if already approved and emailed, just return current state.
       if (row.status === "Approved" && row.emailSent && row.ticketId) return row;
 
+      const ticketId = row.ticketId || generateTicketId();
+
       // Get the frontend origin from request headers (Referer or Origin) to point the QR code link to the frontend page.
       let origin = `${req.protocol}://${req.get("host")}`;
       const referer = req.headers.referer;
