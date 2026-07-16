@@ -33,6 +33,7 @@ function validate(body) {
 // ── Public: registration status ──────────────────────────────────────────────
 // Returns whether registration is still open and how many spots remain.
 // No authentication required.
+// (unchanged)
 router.get("/registration-status", async (_req, res) => {
   try {
     const rows = await listRegistrations();
