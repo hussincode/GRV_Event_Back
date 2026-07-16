@@ -92,6 +92,7 @@ router.post(
       }
 
       const publicBaseUrl = `${req.protocol}://${req.get("host")}`;
+      const isServerless = process.env.VERCEL === '1';
 
       const created = await appendRegistration({
         fullName: String(req.body.fullName).trim(),
@@ -104,14 +105,14 @@ router.post(
         educationalStage: String(req.body.educationalStage).trim(),
         consentMediaUsage: true,
         nationalIdFileUrl: nationalIdFile
-          ? nationalIdFile.filename 
-            ? `${publicBaseUrl}/uploads/${encodeURIComponent(nationalIdFile.filename)}`
-            : `[File received: ${nationalIdFile.originalname}]`
+          ? isServerless 
+            ? `[File received: ${nationalIdFile.originalname}]`
+            : `${publicBaseUrl}/uploads/${encodeURIComponent(nationalIdFile.filename)}`
           : "",
         birthPaperFileUrl: birthPaperFile
-          ? birthPaperFile.filename
-            ? `${publicBaseUrl}/uploads/${encodeURIComponent(birthPaperFile.filename)}`
-            : `[File received: ${birthPaperFile.originalname}]`
+          ? isServerless
+            ? `[File received: ${birthPaperFile.originalname}]`
+            : `${publicBaseUrl}/uploads/${encodeURIComponent(birthPaperFile.filename)}`
           : "",
       });
 
