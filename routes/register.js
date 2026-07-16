@@ -60,37 +60,37 @@ router.post(
     { name: "birthPaperFile", maxCount: 1 },
   ]),
   async (req, res) => {
-    // ── Check registration limit FIRST ──
     try {
-      const rows = await listRegistrations();
-      if (rows.length >= REGISTRATION_LIMIT) {
-        res.status(403).json({
-          error: "Registration is now closed. The maximum number of participants has been reached.",
-          registrationClosed: true,
-        });
+      // ── Check registration limit FIRST ──
+      try {
+        const rows = await listRegistrations();
+        if (rows.length >= REGISTRATION_LIMIT) {
+          res.status(403).json({
+            error: "Registration is now closed. The maximum number of participants has been reached.",
+            registrationClosed: true,
+          });
+          return;
+        }
+      } catch (err) {
+        // If we can't check, proceed — better to allow than to silently block everyone
+        console.error("[register] Could not verify registration count:", err);
+      }
+
+      const errors = validate(req.body || {});
+
+      const nationalIdFile = req.files?.nationalIdFile?.[0] ?? null;
+      const birthPaperFile = req.files?.birthPaperFile?.[0] ?? null;
+
+      if (!nationalIdFile && !birthPaperFile) {
+        res.status(400).json({ error: "Please upload National ID or Birth Paper (PDF/JPG/PNG)." });
         return;
       }
-    } catch (err) {
-      // If we can't check, proceed — better to allow than to silently block everyone
-      console.error("Could not verify registration count:", err);
-    }
 
-    const errors = validate(req.body || {});
+      if (errors.length > 0) {
+        res.status(400).json({ error: errors[0] });
+        return;
+      }
 
-    const nationalIdFile = req.files?.nationalIdFile?.[0] ?? null;
-    const birthPaperFile = req.files?.birthPaperFile?.[0] ?? null;
-
-    if (!nationalIdFile && !birthPaperFile) {
-      res.status(400).json({ error: "Please upload National ID or Birth Paper (PDF)." });
-      return;
-    }
-
-    if (errors.length > 0) {
-      res.status(400).json({ error: errors[0] });
-      return;
-    }
-
-    try {
       const publicBaseUrl = `${req.protocol}://${req.get("host")}`;
 
       const created = await appendRegistration({
@@ -110,10 +110,16 @@ router.post(
           ? `${publicBaseUrl}/uploads/${encodeURIComponent(birthPaperFile.filename)}`
           : "",
       });
+
       res.status(201).json(created);
     } catch (err) {
-      console.error("Failed to save registration:", err);
-      res.status(500).json({ error: "Could not save your registration right now. Please try again shortly." });
+      console.error("[register] Failed to save registration:", err);
+
+      // Always return JSON so the frontend error banner can show a real message.
+      const msg = (err && typeof err === 'object' && 'message' in err) ? err.message : null;
+      res.status(500).json({
+        error: msg || "Could not save your registration right now. Please try again shortly.",
+      });
     }
   },
 );
