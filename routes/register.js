@@ -104,10 +104,14 @@ router.post(
         educationalStage: String(req.body.educationalStage).trim(),
         consentMediaUsage: true,
         nationalIdFileUrl: nationalIdFile
-          ? `${publicBaseUrl}/uploads/${encodeURIComponent(nationalIdFile.filename)}`
+          ? nationalIdFile.filename 
+            ? `${publicBaseUrl}/uploads/${encodeURIComponent(nationalIdFile.filename)}`
+            : `[File received: ${nationalIdFile.originalname}]`
           : "",
         birthPaperFileUrl: birthPaperFile
-          ? `${publicBaseUrl}/uploads/${encodeURIComponent(birthPaperFile.filename)}`
+          ? birthPaperFile.filename
+            ? `${publicBaseUrl}/uploads/${encodeURIComponent(birthPaperFile.filename)}`
+            : `[File received: ${birthPaperFile.originalname}]`
           : "",
       });
 
