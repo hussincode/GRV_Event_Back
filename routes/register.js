@@ -1,7 +1,6 @@
 const express = require("express");
 const path = require("path");
 const { appendRegistration, listRegistrations } = require("../lib/sheets");
-const { upload } = require("../lib/upload-multer");
 
 const router = express.Router();
 
@@ -55,10 +54,6 @@ router.get("/registration-status", async (_req, res) => {
 // ── POST /register ───────────────────────────────────────────────────────────
 router.post(
   "/register",
-  upload.fields([
-    { name: "nationalIdFile", maxCount: 1 },
-    { name: "birthPaperFile", maxCount: 1 },
-  ]),
   async (req, res) => {
     try {
       // ── Check registration limit FIRST ──
@@ -78,21 +73,19 @@ router.post(
 
       const errors = validate(req.body || {});
 
-      const nationalIdFile = req.files?.nationalIdFile?.[0] ?? null;
-      const birthPaperFile = req.files?.birthPaperFile?.[0] ?? null;
-
-      if (!nationalIdFile && !birthPaperFile) {
-        res.status(400).json({ error: "Please upload National ID or Birth Paper (PDF/JPG/PNG)." });
-        return;
-      }
-
       if (errors.length > 0) {
         res.status(400).json({ error: errors[0] });
         return;
       }
 
-      const publicBaseUrl = `${req.protocol}://${req.get("host")}`;
-      const isServerless = process.env.VERCEL === '1';
+      // At least one document URL must be provided
+      const nationalIdUrl = req.body.nationalIdFileUrl?.trim() || '';
+      const birthPaperUrl = req.body.birthPaperFileUrl?.trim() || '';
+
+      if (!nationalIdUrl && !birthPaperUrl) {
+        res.status(400).json({ error: "Please provide at least one identity document URL (National ID or Birth Certificate)." });
+        return;
+      }
 
       const created = await appendRegistration({
         fullName: String(req.body.fullName).trim(),
@@ -104,16 +97,8 @@ router.post(
         governorate: req.body.governorate,
         educationalStage: String(req.body.educationalStage).trim(),
         consentMediaUsage: true,
-        nationalIdFileUrl: nationalIdFile
-          ? isServerless 
-            ? `[File received: ${nationalIdFile.originalname}]`
-            : `${publicBaseUrl}/uploads/${encodeURIComponent(nationalIdFile.filename)}`
-          : "",
-        birthPaperFileUrl: birthPaperFile
-          ? isServerless
-            ? `[File received: ${birthPaperFile.originalname}]`
-            : `${publicBaseUrl}/uploads/${encodeURIComponent(birthPaperFile.filename)}`
-          : "",
+        nationalIdFileUrl: nationalIdUrl,
+        birthPaperFileUrl: birthPaperUrl,
       });
 
       res.status(201).json(created);
