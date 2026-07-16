@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 const { google } = require("googleapis");
 
 const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
