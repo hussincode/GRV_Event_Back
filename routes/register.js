@@ -3,6 +3,7 @@ const path = require("path");
 const { appendRegistration, listRegistrations } = require("../lib/sheets");
 
 const { upload, getFileUrl } = require("../lib/upload-multer");
+const { uploadFileToDrive } = require("../lib/drive-upload");
 
 const router = express.Router();
 
@@ -97,11 +98,33 @@ router.post(
       let birthPaperUrl = req.body?.birthPaperFileUrl?.trim() || '';
 
       if (req.files) {
-        if (req.files.nationalIdFile && req.files.nationalIdFile[0]) {
-          nationalIdUrl = getFileUrl(req, req.files.nationalIdFile[0]);
+        const nationalIdFile = req.files.nationalIdFile?.[0];
+        const birthCertFile = req.files.birthCertificateFile?.[0];
+
+        if (nationalIdFile) {
+          if (nationalIdFile.filename) {
+            // Disk storage (local dev): use static URL
+            nationalIdUrl = getFileUrl(req, nationalIdFile);
+          } else if (nationalIdFile.buffer) {
+            // Memory storage (Vercel): upload to Google Drive
+            nationalIdUrl = await uploadFileToDrive(
+              nationalIdFile.buffer,
+              nationalIdFile.mimetype,
+              nationalIdFile.originalname
+            );
+          }
         }
-        if (req.files.birthCertificateFile && req.files.birthCertificateFile[0]) {
-          birthPaperUrl = getFileUrl(req, req.files.birthCertificateFile[0]);
+
+        if (birthCertFile) {
+          if (birthCertFile.filename) {
+            birthPaperUrl = getFileUrl(req, birthCertFile);
+          } else if (birthCertFile.buffer) {
+            birthPaperUrl = await uploadFileToDrive(
+              birthCertFile.buffer,
+              birthCertFile.mimetype,
+              birthCertFile.originalname
+            );
+          }
         }
       }
 
