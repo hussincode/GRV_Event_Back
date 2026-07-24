@@ -2,6 +2,8 @@ const express = require("express");
 const path = require("path");
 const { appendRegistration, listRegistrations } = require("../lib/sheets");
 
+const { upload, getFileUrl } = require("../lib/upload-multer");
+
 const router = express.Router();
 
 const REGISTRATION_LIMIT = Number(process.env.REGISTRATION_LIMIT) || 210;
@@ -23,17 +25,27 @@ function validate(body) {
   if (!["Male", "Female"].includes(body.gender)) errors.push("Please select a gender");
   const age = Number(body.age);
   if (!age || age < 5 || age > 120) errors.push("Please enter a valid age");
-  if (!body.governorate || !GOVERNORATES.includes(body.governorate)) errors.push("Please select a governorate");
   if (!body.educationalStage || String(body.educationalStage).trim().length === 0) errors.push("Please select your educational stage");
   const consent = body.consentMediaUsage;
   if (consent !== true && String(consent).toLowerCase() !== 'true') errors.push("You must agree to the media consent to register");
   return errors;
 }
 
+const handleUpload = (req, res, next) => {
+  upload.fields([
+    { name: 'nationalIdFile', maxCount: 1 },
+    { name: 'birthCertificateFile', maxCount: 1 },
+  ])(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message || 'File upload error' });
+    }
+    next();
+  });
+};
+
 // ── Public: registration status ──────────────────────────────────────────────
 // Returns whether registration is still open and how many spots remain.
 // No authentication required.
-// (unchanged)
 router.get("/registration-status", async (_req, res) => {
   try {
     const rows = await listRegistrations();
@@ -55,6 +67,7 @@ router.get("/registration-status", async (_req, res) => {
 // ── POST /register ───────────────────────────────────────────────────────────
 router.post(
   "/register",
+  handleUpload,
   async (req, res) => {
     try {
       // ── Check registration limit FIRST ──
@@ -79,12 +92,21 @@ router.post(
         return;
       }
 
-      // At least one document URL must be provided
-      const nationalIdUrl = req.body.nationalIdFileUrl?.trim() || '';
-      const birthPaperUrl = req.body.birthPaperFileUrl?.trim() || '';
+      // Extract uploaded file URLs or fallback to string URLs in body
+      let nationalIdUrl = req.body?.nationalIdFileUrl?.trim() || '';
+      let birthPaperUrl = req.body?.birthPaperFileUrl?.trim() || '';
+
+      if (req.files) {
+        if (req.files.nationalIdFile && req.files.nationalIdFile[0]) {
+          nationalIdUrl = getFileUrl(req, req.files.nationalIdFile[0]);
+        }
+        if (req.files.birthCertificateFile && req.files.birthCertificateFile[0]) {
+          birthPaperUrl = getFileUrl(req, req.files.birthCertificateFile[0]);
+        }
+      }
 
       if (!nationalIdUrl && !birthPaperUrl) {
-        res.status(400).json({ error: "Please provide at least one identity document URL (National ID or Birth Certificate)." });
+        res.status(400).json({ error: "Please upload at least one identity document (National ID or Birth Certificate)." });
         return;
       }
 
@@ -95,7 +117,7 @@ router.post(
         whatsappNumber: String(req.body.whatsappNumber).trim(),
         gender: req.body.gender,
         age: Number(req.body.age),
-        governorate: req.body.governorate,
+        governorate: req.body.governorate ? String(req.body.governorate).trim() : '',
         educationalStage: String(req.body.educationalStage).trim(),
         consentMediaUsage: true,
         nationalIdFileUrl: nationalIdUrl,
