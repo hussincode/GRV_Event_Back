@@ -147,13 +147,6 @@ router.put("/admin/registrations/:rowId", requireAdmin, async (req, res) => {
     return;
   }
 
-  const GOVERNORATES = [
-    "Cairo", "Alexandria", "Giza", "Qalyubia", "Port Said", "Suez", "Dakahlia", "Sharqia",
-    "Gharbia", "Monufia", "Beheira", "Ismailia", "Faiyum", "Beni Suef", "Minya", "Asyut",
-    "Sohag", "Qena", "Aswan", "Luxor", "Red Sea", "New Valley", "Matrouh", "North Sinai",
-    "South Sinai", "Kafr El Sheikh", "Damietta",
-  ];
-
   const body = req.body || {};
   const errors = [];
 
@@ -164,7 +157,6 @@ router.put("/admin/registrations/:rowId", requireAdmin, async (req, res) => {
   if (!["Male", "Female"].includes(body.gender)) errors.push("Please select a gender");
   const age = Number(body.age);
   if (!age || age < 5 || age > 120) errors.push("Please enter a valid age");
-  if (!body.governorate || !GOVERNORATES.includes(body.governorate)) errors.push("Please select a governorate");
   if (!body.educationalStage || String(body.educationalStage).trim().length === 0) errors.push("Please select an educational stage");
   if (!["Pending", "Approved", "Rejected"].includes(body.status)) errors.push("Invalid status");
 
@@ -187,7 +179,7 @@ router.put("/admin/registrations/:rowId", requireAdmin, async (req, res) => {
       whatsappNumber: String(body.whatsappNumber).trim(),
       gender: body.gender,
       age: Number(body.age),
-      governorate: body.governorate,
+      governorate: body.governorate ? String(body.governorate).trim() : (existing.governorate || ""),
       educationalStage: String(body.educationalStage).trim(),
       consentMediaUsage: existing.consentMediaUsage,
       nationalIdFileUrl: existing.nationalIdFileUrl || "",
