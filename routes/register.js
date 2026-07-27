@@ -4,6 +4,7 @@ const { appendRegistration, listRegistrations } = require("../lib/sheets");
 
 const { upload, getFileUrl } = require("../lib/upload-multer");
 const { uploadFileToDrive } = require("../lib/drive-upload");
+const { getAdminFromCookie } = require("../lib/auth");
 
 const router = express.Router();
 
@@ -71,10 +72,12 @@ router.post(
   handleUpload,
   async (req, res) => {
     try {
+      const isAdminAddUserFlow = Boolean(getAdminFromCookie(req));
+
       // ── Check registration limit FIRST ──
       try {
         const rows = await listRegistrations();
-        if (rows.length >= REGISTRATION_LIMIT) {
+        if (!isAdminAddUserFlow && rows.length >= REGISTRATION_LIMIT) {
           res.status(403).json({
             error: "Registration is now closed. The maximum number of participants has been reached.",
             registrationClosed: true,

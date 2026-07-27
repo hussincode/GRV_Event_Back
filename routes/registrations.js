@@ -38,6 +38,96 @@ router.get("/admin/registrations/stats", requireAdmin, async (_req, res) => {
   }
 });
 
+router.post("/admin/registrations/send-approved-emails", requireAdmin, async (req, res) => {
+  try {
+    const rows = await listRegistrations();
+    const approvedRows = rows.filter((row) => row.status === "Approved");
+
+    const results = [];
+    let sentCount = 0;
+    let failedCount = 0;
+    let skippedCount = 0;
+
+    const buildOrigin = () => {
+      let origin = `${req.protocol}://${req.get("host")}`;
+      const referer = req.headers.referer;
+      if (referer) {
+        try {
+          origin = new URL(referer).origin;
+        } catch (e) {
+          // ignore parsing error
+        }
+      } else if (req.headers.origin) {
+        origin = req.headers.origin;
+      }
+      return origin;
+    };
+
+    for (const row of approvedRows) {
+      try {
+        const updated = await withRowLock(row.id, async () => {
+          const current = await getRegistration(row.id);
+          if (!current || !current.fullName) {
+            return { rowId: row.id, status: "skipped", reason: "registration not found" };
+          }
+
+          if (current.status !== "Approved") {
+            return { rowId: row.id, status: "skipped", reason: "not approved" };
+          }
+
+          if (!current.email || !current.fullName) {
+            return { rowId: row.id, status: "skipped", reason: "missing email or name" };
+          }
+
+          const ticketId = current.ticketId || generateTicketId();
+          const origin = buildOrigin();
+          const checkinUrl = `${origin}/checkin-admin?ticket=${encodeURIComponent(ticketId)}`;
+          const qrCodeDataUrl = await generateTicketQrCodeDataUrl(checkinUrl);
+
+          await sendApprovalEmail({
+            to: current.email,
+            fullName: current.fullName,
+            ticketId,
+            qrCodeDataUrl,
+          });
+
+          const next = { ...current, status: "Approved", ticketId, emailSent: true };
+          await updateRegistrationStatusColumns(row.id, {
+            status: next.status,
+            ticketId: next.ticketId,
+            emailSent: next.emailSent,
+            checkedIn: next.checkedIn,
+            checkedInAt: next.checkedInAt,
+          });
+
+          return { rowId: row.id, status: "sent", ticketId };
+        });
+
+        if (updated.status === "sent") {
+          sentCount += 1;
+        } else {
+          skippedCount += 1;
+        }
+        results.push(updated);
+      } catch (err) {
+        failedCount += 1;
+        results.push({ rowId: row.id, status: "failed", error: err?.message || String(err) });
+      }
+    }
+
+    res.json({
+      sentCount,
+      failedCount,
+      skippedCount,
+      totalApproved: approvedRows.length,
+      results,
+    });
+  } catch (err) {
+    console.error("Failed to resend approval emails:", err);
+    res.status(500).json({ error: "Could not resend approval emails right now." });
+  }
+});
+
 router.post("/admin/registrations/:rowId/approve", requireAdmin, async (req, res) => {
   const rowId = Number(req.params.rowId);
   if (!rowId || Number.isNaN(rowId)) {
